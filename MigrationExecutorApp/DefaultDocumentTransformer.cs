@@ -11,8 +11,7 @@ namespace MigrationConsoleApp
     {
         public Task<IEnumerable<Document>> TransformDocument(Document sourceDoc)
         {
-            var docs = new List<Document>();
-            docs.Add(sourceDoc);
+            var docs = OneServiceDocumentTransformer.TransformDocument(sourceDoc);
 
             return Task.FromResult(docs.AsEnumerable());
         }

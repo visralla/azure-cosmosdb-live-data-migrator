@@ -22,7 +22,7 @@
     using ChangeFeedObserverCloseReason = Microsoft.Azure.Documents.ChangeFeedProcessor.FeedProcessing.ChangeFeedObserverCloseReason;
     using IChangeFeedObserver = Microsoft.Azure.Documents.ChangeFeedProcessor.FeedProcessing.IChangeFeedObserver;
 
-    public class DocumentFeedObserver: IChangeFeedObserver
+    public class DocumentFeedObserver : IChangeFeedObserver
     {
         private readonly DocumentClient client;
         private readonly Uri destinationCollectionUri;
@@ -39,7 +39,7 @@
             this.client = client;
             this.destinationCollectionUri = UriFactory.CreateDocumentCollectionUri(destCollInfo.DatabaseName, destCollInfo.CollectionName);
             this.documentTransformer = documentTransformer;
-            this.containerClient = containerClient;  
+            this.containerClient = containerClient;
         }
 
         public async Task OpenAsync(IChangeFeedObserverContext context)
@@ -69,8 +69,8 @@
         }
 
         public async Task ProcessChangesAsync(
-            IChangeFeedObserverContext context, 
-            IReadOnlyList<Document> docs, 
+            IChangeFeedObserverContext context,
+            IReadOnlyList<Document> docs,
             CancellationToken cancellationToken)
         {
             BulkImportResponse bulkImportResponse = new BulkImportResponse();
@@ -87,14 +87,16 @@
                     transformedDocs.AddRange(documentTransformer.TransformDocument(document).Result);
                 }
 
-                bulkImportResponse = await bulkExecutor.BulkImportAsync(
-                    documents: transformedDocs,
-                    enableUpsert: true,
-                    maxConcurrencyPerPartitionKeyRange: 1,
-                    disableAutomaticIdGeneration: true,
-                    maxInMemorySortingBatchSize: null,
-                    cancellationToken: new CancellationToken(),
-                    maxMiniBatchSizeBytes: 100 * 1024);
+                if (transformedDocs.Any())
+                {
+                    bulkImportResponse = await bulkExecutor.BulkImportAsync(
+                        documents: transformedDocs,
+                        enableUpsert: true,
+                        maxConcurrencyPerPartitionKeyRange: 1,
+                        disableAutomaticIdGeneration: true,
+                        maxInMemorySortingBatchSize: null,
+                        cancellationToken: new CancellationToken());
+                }
 
                 if (bulkImportResponse.FailedImports.Count > 0 && containerClient != null)
                 {
@@ -156,14 +158,14 @@
         }
 
         public static Document MapPartitionKey(Document doc, Boolean isSyntheticKey, string targetPartitionKey, Boolean isNestedAttribute, string sourcePartitionKeys)
-        {            
+        {
             if (isSyntheticKey)
             {
                 doc = CreateSyntheticKey(doc, sourcePartitionKeys, isNestedAttribute, targetPartitionKey);
             }
             else
             {
-                doc.SetPropertyValue(targetPartitionKey, isNestedAttribute == true ? GetNestedValue(doc, sourcePartitionKeys): doc.GetPropertyValue<string>(sourcePartitionKeys));      
+                doc.SetPropertyValue(targetPartitionKey, isNestedAttribute == true ? GetNestedValue(doc, sourcePartitionKeys) : doc.GetPropertyValue<string>(sourcePartitionKeys));
             }
             return doc;
         }
@@ -193,11 +195,11 @@
             return doc;
         }
 
-        public static string GetNestedValue (Document doc, string path)
+        public static string GetNestedValue(Document doc, string path)
         {
             var jsonReader = JsonReaderWriterFactory.CreateJsonReader(Encoding.UTF8.GetBytes(doc.ToString()), new System.Xml.XmlDictionaryReaderQuotas());
             var root = XElement.Load(jsonReader);
-            string value = root.XPathSelectElement("//"+path).Value;
+            string value = root.XPathSelectElement("//" + path).Value;
             return value;
         }
     }
