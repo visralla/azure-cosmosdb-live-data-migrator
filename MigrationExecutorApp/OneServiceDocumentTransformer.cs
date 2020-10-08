@@ -162,6 +162,7 @@ namespace MigrationConsoleApp
 
         public static IEnumerable<Document> GetWeatherAction(JObject docObj, string userId)
         {
+            // Preconditions //
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
             if (data == null || !data.Any())
@@ -174,6 +175,7 @@ namespace MigrationConsoleApp
             {
                 return docs.AsEnumerable();
             }
+            // End Preconditions //
 
             JArray dataArr = JArray.Parse(tmpData.Value.ToString());
             int rank = 0;
@@ -246,6 +248,7 @@ namespace MigrationConsoleApp
 
         public static IEnumerable<Document> GetTrendingOnBingAction(JObject docObj, string userId)
         {
+            // Preconditions //
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
             if (data == null || !data.Any())
@@ -258,6 +261,7 @@ namespace MigrationConsoleApp
             {
                 return docs.AsEnumerable();
             }
+            // End Preconditions //
 
             JArray dataArr = JArray.Parse(tmpData.Value.ToString());
             foreach (JObject item in dataArr)
@@ -328,6 +332,7 @@ namespace MigrationConsoleApp
 
         public static IEnumerable<Document> GetInterestSettings(JObject docObj, string userId)
         {
+            // Preconditions //
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
             if (data == null || !data.Any())
@@ -340,6 +345,7 @@ namespace MigrationConsoleApp
             {
                 return docs.AsEnumerable();
             }
+            // End Preconditions //
 
             JObject dataObj = JObject.Parse(tmpData.Value.ToString());
             var isPersonalizationEnabled = dataObj?["IsPersonalizationEnabled"]?.ToString();
@@ -383,6 +389,7 @@ namespace MigrationConsoleApp
 
         public static IEnumerable<Document> GetSportsAction(JObject docObj, string userId)
         {
+            // Preconditions //
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
             if (data == null || !data.Any())
@@ -395,6 +402,7 @@ namespace MigrationConsoleApp
             {
                 return docs.AsEnumerable();
             }
+            // End Preconditions //
 
             JArray dataArr = JArray.Parse(tmpData.Value.ToString());
             int rank = 1;
@@ -437,6 +445,7 @@ namespace MigrationConsoleApp
 
         public static IEnumerable<Document> GetFinanceAction(JObject docObj, string userId)
         {
+            // Preconditions //
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
             if (data == null || !data.Any())
@@ -449,6 +458,7 @@ namespace MigrationConsoleApp
             {
                 return docs.AsEnumerable();
             }
+            // End Preconditions //
 
             JArray dataArr = JArray.Parse(tmpData.Value.ToString());
             int rank = 1;
