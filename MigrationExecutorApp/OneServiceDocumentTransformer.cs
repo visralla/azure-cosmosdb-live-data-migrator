@@ -89,65 +89,71 @@ namespace MigrationConsoleApp
 
         public static IEnumerable<Document> GetNewsAction(JObject docObj, string userId)
         {
+            // Preconditions //
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
-            if (data != null && data.Any())
+            if (data == null || !data.Any())
             {
-                var tmpData = data.FirstOrDefault();
-                if (tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+                return docs.AsEnumerable();
+            }
+
+            var tmpData = data.FirstOrDefault();
+            if (!tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+            {
+                return docs.AsEnumerable();
+            }
+            // End Preconditions //
+
+            int rank = 0;
+            JArray dataArr = JArray.Parse(tmpData.Value.ToString());
+            foreach (JObject item in dataArr)
+            {
+                var displayName = item["DisplayName"]?.ToString();
+                JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
+                var categoryId = interestTypeSpecificFields?["PdpCategoryId"]?.ToString();
+                var newsIdentifier = interestTypeSpecificFields?["NewsIdentifier"]?.ToString();
+
+                JObject metadata = new JObject();
+                if (!string.IsNullOrWhiteSpace(displayName))
                 {
-                    int rank = 0;
-                    JArray dataArr = JArray.Parse(tmpData.Value.ToString());
-                    foreach (JObject item in dataArr)
-                    {
-                        var displayName = item["DisplayName"]?.ToString();
-                        JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
-                        var categoryId = interestTypeSpecificFields?["PdpCategoryId"]?.ToString();
-                        var newsIdentifier = interestTypeSpecificFields?["NewsIdentifier"]?.ToString();
+                    metadata.Add("displayName", displayName);
+                }
 
-                        JObject metadata = new JObject();
-                        if (!string.IsNullOrWhiteSpace(displayName))
-                        {
-                            metadata.Add("displayName", displayName);
-                        }
+                if (!string.IsNullOrWhiteSpace(categoryId))
+                {
+                    metadata.Add("pdpCategoryId", categoryId);
+                }
 
-                        if (!string.IsNullOrWhiteSpace(categoryId))
-                        {
-                            metadata.Add("pdpCategoryId", categoryId);
-                        }
+                if (!string.IsNullOrWhiteSpace(newsIdentifier))
+                {
+                    metadata.Add("newsIdentifier", newsIdentifier);
+                }
 
-                        if (!string.IsNullOrWhiteSpace(newsIdentifier))
-                        {
-                            metadata.Add("newsIdentifier", newsIdentifier);
-                        }
+                MsnAction a = new MsnAction
+                {
+                    DefinitionName = $"{displayName}.{categoryId}.{newsIdentifier}",
+                    TargetType = nameof(UserQuery),
+                    ActionType = "Follow",
+                    Rank = rank++,
+                    Metadata = metadata,
+                    OwnerId = userId,
+                    PartitionKey = userId
+                };
 
-                        MsnAction a = new MsnAction
-                        {
-                            DefinitionName = $"{displayName}.{categoryId}.{newsIdentifier}",
-                            TargetType = nameof(UserQuery),
-                            ActionType = "Follow",
-                            Rank = rank++,
-                            Metadata = metadata,
-                            OwnerId = userId,
-                            PartitionKey = userId
-                        };
+                if (long.TryParse(item["CreatedTimeInTicksUtc"]?.ToString(), out long createdTimeInTicks))
+                {
+                    a.CreatedDateTime = new DateTime(createdTimeInTicks).ToString(TagEntityUtil.TimeFormat);
+                }
 
-                        if (long.TryParse(item["CreatedTimeInTicksUtc"]?.ToString(), out long createdTimeInTicks))
-                        {
-                            a.CreatedDateTime = new DateTime(createdTimeInTicks).ToString(TagEntityUtil.TimeFormat);
-                        }
+                a.TargetId = ToHashGuid(a.DefinitionName);
+                a.Id = TagEntityUtil.GetId("Follow", userId, a.TargetId);
+                var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
 
-                        a.TargetId = ToHashGuid(a.DefinitionName);
-                        a.Id = TagEntityUtil.GetId("Follow", userId, a.TargetId);
-                        var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
-
-                        using (JsonReader reader = new JTokenReader(dynamicDoc))
-                        {
-                            Document d = new Document();
-                            d.LoadFrom(reader);
-                            docs.Add(d);
-                        }
-                    }
+                using (JsonReader reader = new JTokenReader(dynamicDoc))
+                {
+                    Document d = new Document();
+                    d.LoadFrom(reader);
+                    docs.Add(d);
                 }
             }
 
@@ -158,76 +164,80 @@ namespace MigrationConsoleApp
         {
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
-            if (data != null && data.Any())
+            if (data == null || !data.Any())
             {
-                var tmpData = data.FirstOrDefault();
-                if (tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+                return docs.AsEnumerable();
+            }
+
+            var tmpData = data.FirstOrDefault();
+            if (!tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+            {
+                return docs.AsEnumerable();
+            }
+
+            JArray dataArr = JArray.Parse(tmpData.Value.ToString());
+            int rank = 0;
+            foreach (JObject item in dataArr)
+            {
+                JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
+                var latitude = interestTypeSpecificFields?["Latitude"]?.ToString();
+                var longitude = interestTypeSpecificFields?["Longitude"]?.ToString();
+
+                if (string.IsNullOrWhiteSpace(latitude) || string.IsNullOrWhiteSpace(longitude))
                 {
-                    JArray dataArr = JArray.Parse(tmpData.Value.ToString());
-                    int rank = 0;
-                    foreach (JObject item in dataArr)
+                    Trace.TraceInformation("Skipping Location for user {0} due to missing Latitude and Longitude, doc id {1}", userId, (string)docObj["id"]);
+                    continue;
+                }
+
+                JObject metadata = new JObject();
+                var displayName = item["DisplayName"]?.ToString();
+                var correlationGuid = item["CorrelationGuid"]?.ToString();
+
+                if (!string.IsNullOrWhiteSpace(displayName))
+                {
+                    metadata.Add("displayName", displayName);
+                }
+
+                foreach (JProperty property in interestTypeSpecificFields.Properties())
+                {
+                    var value = property.Value?.ToString();
+                    if (!string.IsNullOrWhiteSpace(value))
                     {
-                        JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
-                        var latitude = interestTypeSpecificFields?["Latitude"]?.ToString();
-                        var longitude = interestTypeSpecificFields?["Longitude"]?.ToString();
-
-                        if (string.IsNullOrWhiteSpace(latitude) || string.IsNullOrWhiteSpace(longitude))
-                        {
-                            Trace.TraceInformation("Skipping Location for user {0} due to missing Latitude and Longitude, doc id {1}", userId, (string)docObj["id"]);
-                            continue;
-                        }
-
-                        JObject metadata = new JObject();
-                        var displayName = item["DisplayName"]?.ToString();
-                        var correlationGuid = item["CorrelationGuid"]?.ToString();
-
-                        if (!string.IsNullOrWhiteSpace(displayName))
-                        {
-                            metadata.Add("displayName", displayName);
-                        }
-
-                        foreach (JProperty property in interestTypeSpecificFields.Properties())
-                        {
-                            var value = property.Value?.ToString();
-                            if (!string.IsNullOrWhiteSpace(value))
-                            {
-                                metadata.Add(ToLowerFirstChar(property.Name), value);
-                            }
-                        }
-
-                        MsnAction a = new MsnAction
-                        {
-                            DefinitionName = $"{latitude},{longitude}",
-                            TargetType = nameof(StructureDataTypes.Location),
-                            ActionType = "Follow",
-                            Degree = "FavoriteLocation",
-                            Metadata = metadata,
-                            OwnerId = userId,
-                            Rank = rank++,
-                            PartitionKey = userId
-                        };
-
-                        if (correlationGuid == "WeatherForecastNearby")
-                        {
-                            a.Degree = "WeatherForecastNearby";
-                        }
-
-                        if (long.TryParse(item["CreatedTimeInTicksUtc"]?.ToString(), out long createdTimeInTicks))
-                        {
-                            a.CreatedDateTime = new DateTime(createdTimeInTicks).ToString(TagEntityUtil.TimeFormat);
-                        }
-
-                        a.TargetId = ToHashGuid(a.DefinitionName);
-                        a.Id = TagEntityUtil.GetId("Follow", userId, a.TargetId);
-                        var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
-
-                        using (JsonReader reader = new JTokenReader(dynamicDoc))
-                        {
-                            Document d = new Document();
-                            d.LoadFrom(reader);
-                            docs.Add(d);
-                        }
+                        metadata.Add(ToLowerFirstChar(property.Name), value);
                     }
+                }
+
+                MsnAction a = new MsnAction
+                {
+                    DefinitionName = $"{latitude},{longitude}",
+                    TargetType = nameof(StructureDataTypes.Location),
+                    ActionType = "Follow",
+                    Degree = "FavoriteLocation",
+                    Metadata = metadata,
+                    OwnerId = userId,
+                    Rank = rank++,
+                    PartitionKey = userId
+                };
+
+                if (correlationGuid == "WeatherForecastNearby")
+                {
+                    a.Degree = "WeatherForecastNearby";
+                }
+
+                if (long.TryParse(item["CreatedTimeInTicksUtc"]?.ToString(), out long createdTimeInTicks))
+                {
+                    a.CreatedDateTime = new DateTime(createdTimeInTicks).ToString(TagEntityUtil.TimeFormat);
+                }
+
+                a.TargetId = ToHashGuid(a.DefinitionName);
+                a.Id = TagEntityUtil.GetId("Follow", userId, a.TargetId);
+                var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
+
+                using (JsonReader reader = new JTokenReader(dynamicDoc))
+                {
+                    Document d = new Document();
+                    d.LoadFrom(reader);
+                    docs.Add(d);
                 }
             }
 
@@ -238,74 +248,78 @@ namespace MigrationConsoleApp
         {
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
-            if (data != null && data.Any())
+            if (data == null || !data.Any())
             {
-                var tmpData = data.FirstOrDefault();
-                if (tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+                return docs.AsEnumerable();
+            }
+
+            var tmpData = data.FirstOrDefault();
+            if (!tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+            {
+                return docs.AsEnumerable();
+            }
+
+            JArray dataArr = JArray.Parse(tmpData.Value.ToString());
+            foreach (JObject item in dataArr)
+            {
+                JObject metadata = new JObject();
+                var displayName = item["DisplayName"]?.ToString();
+
+                if (!string.IsNullOrWhiteSpace(displayName))
                 {
-                    JArray dataArr = JArray.Parse(tmpData.Value.ToString());
-                    foreach (JObject item in dataArr)
-                    {
-                        JObject metadata = new JObject();
-                        var displayName = item["DisplayName"]?.ToString();
+                    metadata.Add("displayName", displayName);
+                }
 
-                        if (!string.IsNullOrWhiteSpace(displayName))
-                        {
-                            metadata.Add("displayName", displayName);
-                        }
+                JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
+                var newsCategory = interestTypeSpecificFields?["NewsCategory"]?.ToString();
+                var preference = interestTypeSpecificFields?["PreferenceValue"]?.ToString();
 
-                        JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
-                        var newsCategory = interestTypeSpecificFields?["NewsCategory"]?.ToString();
-                        var preference = interestTypeSpecificFields?["PreferenceValue"]?.ToString();
+                if (string.IsNullOrWhiteSpace(newsCategory))
+                {
+                    Trace.TraceInformation("Skipping TrendingOnbing for user {0} due to missing NewsCategory, doc id {1}", userId, (string)docObj["id"]);
+                    return new List<Document>();
+                }
 
-                        if (string.IsNullOrWhiteSpace(newsCategory))
-                        {
-                            Trace.TraceInformation("Skipping TrendingOnbing for user {0} due to missing NewsCategory, doc id {1}", userId, (string)docObj["id"]);
-                            return new List<Document>();
-                        }
+                metadata.Add("newsCategory", newsCategory);
 
-                        metadata.Add("newsCategory", newsCategory);
+                if (!string.IsNullOrWhiteSpace(preference))
+                {
+                    metadata.Add("preferenceValue", preference);
+                }
 
-                        if (!string.IsNullOrWhiteSpace(preference))
-                        {
-                            metadata.Add("preferenceValue", preference);
-                        }
+                MsnAction a = new MsnAction
+                {
+                    ActionType = "Preference",
+                    TargetType = "TrendingOnBing",
+                    Metadata = metadata,
+                    OwnerId = userId,
+                    PartitionKey = userId
+                };
 
-                        MsnAction a = new MsnAction
-                        {
-                            ActionType = "Preference",
-                            TargetType = "TrendingOnBing",
-                            Metadata = metadata,
-                            OwnerId = userId,
-                            PartitionKey = userId
-                        };
+                if (int.TryParse(newsCategory, out int intValue))
+                {
+                    a.DefinitionName = ((NewsCategory)intValue).ToString();
+                }
+                else
+                {
+                    a.DefinitionName = newsCategory;
+                }
 
-                        if (int.TryParse(newsCategory, out int intValue))
-                        {
-                            a.DefinitionName = ((NewsCategory)intValue).ToString();
-                        }
-                        else
-                        {
-                            a.DefinitionName = newsCategory;
-                        }
+                if (long.TryParse(item["CreatedTimeInTicksUtc"]?.ToString(), out long createdTimeInTicks))
+                {
+                    a.CreatedDateTime = new DateTime(createdTimeInTicks).ToString(TagEntityUtil.TimeFormat);
+                }
 
-                        if (long.TryParse(item["CreatedTimeInTicksUtc"]?.ToString(), out long createdTimeInTicks))
-                        {
-                            a.CreatedDateTime = new DateTime(createdTimeInTicks).ToString(TagEntityUtil.TimeFormat);
-                        }
+                a.TargetId = ToHashGuid(a.DefinitionName);
+                a.Id = $"pr_{userId}_{a.TargetId}";
+                //TagEntityUtil.GetId("Follow", userId, a.TargetId);
+                var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
 
-                        a.TargetId = ToHashGuid(a.DefinitionName);
-                        a.Id = $"pr_{userId}_{a.TargetId}";
-                        //TagEntityUtil.GetId("Follow", userId, a.TargetId);
-                        var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
-
-                        using (JsonReader reader = new JTokenReader(dynamicDoc))
-                        {
-                            Document d = new Document();
-                            d.LoadFrom(reader);
-                            docs.Add(d);
-                        }
-                    }
+                using (JsonReader reader = new JTokenReader(dynamicDoc))
+                {
+                    Document d = new Document();
+                    d.LoadFrom(reader);
+                    docs.Add(d);
                 }
             }
 
@@ -316,48 +330,52 @@ namespace MigrationConsoleApp
         {
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
-            if (data != null && data.Any())
+            if (data == null || !data.Any())
             {
-                var tmpData = data.FirstOrDefault();
-                if (tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
-                {
-                    JObject dataObj = JObject.Parse(tmpData.Value.ToString());
-                    var isPersonalizationEnabled = dataObj?["IsPersonalizationEnabled"]?.ToString();
-                    var lastChangeTime = dataObj?["LastChangeTimeInTicksUtcOfIsPersonalizationEnabled"]?.ToString();
+                return docs.AsEnumerable();
+            }
 
-                    JToken interestTypeSettings = dataObj?["InterestTypeSettings"];
-                    var temperatureUnit = string.Empty;
+            var tmpData = data.FirstOrDefault();
+            if (!tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+            {
+                return docs.AsEnumerable();
+            }
 
-                    if (interestTypeSettings != null && interestTypeSettings.Type != JTokenType.Null)
-                    {
-                        temperatureUnit = interestTypeSettings?["Weather"]?["AdditionalSettings"]?["ShouldUseCelsius"]?.ToString();
-                    }
+            JObject dataObj = JObject.Parse(tmpData.Value.ToString());
+            var isPersonalizationEnabled = dataObj?["IsPersonalizationEnabled"]?.ToString();
+            var lastChangeTime = dataObj?["LastChangeTimeInTicksUtcOfIsPersonalizationEnabled"]?.ToString();
 
-                    MsnUser user = new MsnUser { PartitionKey = userId, Id = userId };
-                    if (!string.IsNullOrWhiteSpace(isPersonalizationEnabled))
-                    {
-                        user.UserSettings.Add("isPersonalizationEnabled", isPersonalizationEnabled);
-                    }
+            JToken interestTypeSettings = dataObj?["InterestTypeSettings"];
+            var temperatureUnit = string.Empty;
 
-                    if (!string.IsNullOrWhiteSpace(lastChangeTime))
-                    {
-                        user.UserSettings.Add("lastChangeTimeInTicksUtcOfIsPersonalizationEnabled", lastChangeTime);
-                    }
+            if (interestTypeSettings != null && interestTypeSettings.Type != JTokenType.Null)
+            {
+                temperatureUnit = interestTypeSettings?["Weather"]?["AdditionalSettings"]?["ShouldUseCelsius"]?.ToString();
+            }
 
-                    if (!string.IsNullOrWhiteSpace(temperatureUnit))
-                    {
-                        user.UserSettings.Add("shouldUseCelsius", temperatureUnit);
-                    }
+            MsnUser user = new MsnUser { PartitionKey = userId, Id = userId };
+            if (!string.IsNullOrWhiteSpace(isPersonalizationEnabled))
+            {
+                user.UserSettings.Add("isPersonalizationEnabled", isPersonalizationEnabled);
+            }
 
-                    var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(user, jsonSettings));
+            if (!string.IsNullOrWhiteSpace(lastChangeTime))
+            {
+                user.UserSettings.Add("lastChangeTimeInTicksUtcOfIsPersonalizationEnabled", lastChangeTime);
+            }
 
-                    using (JsonReader reader = new JTokenReader(dynamicDoc))
-                    {
-                        Document d = new Document();
-                        d.LoadFrom(reader);
-                        docs.Add(d);
-                    }
-                }
+            if (!string.IsNullOrWhiteSpace(temperatureUnit))
+            {
+                user.UserSettings.Add("shouldUseCelsius", temperatureUnit);
+            }
+
+            var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(user, jsonSettings));
+
+            using (JsonReader reader = new JTokenReader(dynamicDoc))
+            {
+                Document d = new Document();
+                d.LoadFrom(reader);
+                docs.Add(d);
             }
 
             return docs.AsEnumerable();
@@ -367,46 +385,50 @@ namespace MigrationConsoleApp
         {
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
-            if (data != null && data.Any())
+            if (data == null || !data.Any())
             {
-                var tmpData = data.FirstOrDefault();
-                if (tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+                return docs.AsEnumerable();
+            }
+
+            var tmpData = data.FirstOrDefault();
+            if (!tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+            {
+                return docs.AsEnumerable();
+            }
+
+            JArray dataArr = JArray.Parse(tmpData.Value.ToString());
+            int rank = 1;
+
+            foreach (JObject item in dataArr)
+            {
+                JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
+
+                var teamId = interestTypeSpecificFields.GetValue("MsnShortTeamId")?.ToString();
+
+                if (string.IsNullOrWhiteSpace(teamId))
                 {
-                    JArray dataArr = JArray.Parse(tmpData.Value.ToString());
-                    int rank = 1;
+                    Trace.TraceInformation("Skipping doc id - {0}, user {1}", (string)docObj["id"], userId);
+                    continue;
+                }
 
-                    foreach (JObject item in dataArr)
-                    {
-                        JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
+                MsnAction a = new MsnAction
+                {
+                    TargetId = teamId,
+                    TargetType = "Team",
+                    ActionType = "Follow",
+                    Id = "f_" + userId + "_" + teamId,
+                    Metadata = item,
+                    Rank = rank++,
+                    OwnerId = userId
+                };
 
-                        var teamId = interestTypeSpecificFields.GetValue("MsnShortTeamId")?.ToString();
+                var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
 
-                        if (string.IsNullOrWhiteSpace(teamId))
-                        {
-                            Trace.TraceInformation("Skipping doc id - {0}, user {1}", (string)docObj["id"], userId);
-                            continue;
-                        }
-
-                        MsnAction a = new MsnAction
-                        {
-                            TargetId = teamId,
-                            TargetType = "Team",
-                            ActionType = "Follow",
-                            Id = "f_" + userId + "_" + teamId,
-                            Metadata = item,
-                            Rank = rank++,
-                            OwnerId = userId
-                        };
-
-                        var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
-
-                        using (JsonReader reader = new JTokenReader(dynamicDoc))
-                        {
-                            Document d = new Document();
-                            d.LoadFrom(reader);
-                            docs.Add(d);
-                        }
-                    }
+                using (JsonReader reader = new JTokenReader(dynamicDoc))
+                {
+                    Document d = new Document();
+                    d.LoadFrom(reader);
+                    docs.Add(d);
                 }
             }
 
@@ -417,46 +439,50 @@ namespace MigrationConsoleApp
         {
             var docs = new List<Document>();
             var data = docObj["data"].ToObject<Dictionary<string, object>>();
-            if (data != null && data.Any())
+            if (data == null || !data.Any())
             {
-                var tmpData = data.FirstOrDefault();
-                if (tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+                return docs.AsEnumerable();
+            }
+
+            var tmpData = data.FirstOrDefault();
+            if (!tmpData.Key.Equals("data", StringComparison.OrdinalIgnoreCase))
+            {
+                return docs.AsEnumerable();
+            }
+
+            JArray dataArr = JArray.Parse(tmpData.Value.ToString());
+            int rank = 1;
+
+            foreach (JObject item in dataArr)
+            {
+                JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
+
+                var id = interestTypeSpecificFields.GetValue("MorningStarId")?.ToString();
+
+                if (string.IsNullOrWhiteSpace(id))
                 {
-                    JArray dataArr = JArray.Parse(tmpData.Value.ToString());
-                    int rank = 1;
+                    Trace.TraceInformation("Skipping doc id - {0}, user {1}", (string)docObj["id"], userId);
+                    continue;
+                }
 
-                    foreach (JObject item in dataArr)
-                    {
-                        JObject interestTypeSpecificFields = (JObject)item["InterestTypeSpecificFields"];
+                MsnAction a = new MsnAction
+                {
+                    TargetId = id,
+                    TargetType = "Finance",
+                    ActionType = "Follow",
+                    Id = "f_" + userId + "_" + id,
+                    Metadata = item,
+                    Rank = rank++,
+                    OwnerId = userId
+                };
 
-                        var id = interestTypeSpecificFields.GetValue("MorningStarId")?.ToString();
+                var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
 
-                        if (string.IsNullOrWhiteSpace(id))
-                        {
-                            Trace.TraceInformation("Skipping doc id - {0}, user {1}", (string)docObj["id"], userId);
-                            continue;
-                        }
-
-                        MsnAction a = new MsnAction
-                        {
-                            TargetId = id,
-                            TargetType = "Finance",
-                            ActionType = "Follow",
-                            Id = "f_" + userId + "_" + id,
-                            Metadata = item,
-                            Rank = rank++,
-                            OwnerId = userId
-                        };
-
-                        var dynamicDoc = JsonConvert.DeserializeObject<dynamic>(JsonConvert.SerializeObject(a, jsonSettings));
-
-                        using (JsonReader reader = new JTokenReader(dynamicDoc))
-                        {
-                            Document d = new Document();
-                            d.LoadFrom(reader);
-                            docs.Add(d);
-                        }
-                    }
+                using (JsonReader reader = new JTokenReader(dynamicDoc))
+                {
+                    Document d = new Document();
+                    d.LoadFrom(reader);
+                    docs.Add(d);
                 }
             }
 
