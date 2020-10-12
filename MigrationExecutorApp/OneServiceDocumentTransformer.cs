@@ -160,6 +160,76 @@ namespace MigrationConsoleApp
             return docs.AsEnumerable();
         }
 
+
+
+        /*  Weather Data Schema  
+         *  "[{
+                \"CorrelationGuid\":\"WeatherForecastNearby\",
+                \"DomainSpecificId\":null,
+                \"DisplayName\":\"Local weather\",
+                \"CreatedTimeInTicksUtc\":636518200278340094,
+                \"InterestType\":12,
+                \"InterestTypeSpecificFields\":
+                {
+                    \"Latitude\":\"0.00\",
+                    \"Longitude\":\"0.00\",
+                    \"City\":\"\",
+                    \"State\":\"\",
+                    \"CountryRegion\":\"\",
+                    \"ISOCode\":\"\",
+                    \"LocationType\":null,
+                    \"EntityType\":\"\",
+                    \"IsWeatherNearby\":\"true\"
+                }}]"
+
+            "[{
+                \"CorrelationGuid\":\"7140f49c-17f2-4cc3-987a-27f99c628d65\",
+                \"DomainSpecificId\":null,
+                \"DisplayName\":\"New York, New York\",
+                \"CreatedTimeInTicksUtc\":637232429094084768,
+                \"InterestType\":12,
+                \"InterestTypeSpecificFields\":
+                {
+                    \"Latitude\":\"40.71\",
+                    \"Longitude\":\"-74.01\",
+                    \"City\":\"New York\",
+                    \"State\":\"New York\",
+                    \"CountryRegion\":\"United States\",
+                    \"ISOCode\":\"US\",
+                    \"LocationType\":null,
+                    \"EntityType\":\"\",
+                    \"IsWeatherNearby\":null
+                }
+            },{
+                \"CorrelationGuid\":\"c1c8b390-1514-497c-9f71-ea4413f85fed\",
+                \"DomainSpecificId\":null,
+                \"DisplayName\":\"Pittsburgh, Pennsylvania\",
+                \"CreatedTimeInTicksUtc\":637232429287479152,
+                \"InterestType\":12,
+                \"InterestTypeSpecificFields\":
+                {
+                    \"Latitude\":\"40.44\",
+                    \"Longitude\":\"-80.00\",
+                    \"City\":\"Pittsburgh\",
+                    \"State\":\"Pennsylvania\",
+                    \"CountryRegion\":\"United States\",
+                    \"ISOCode\":\"US\",
+                    \"LocationType\":null,
+                    \"EntityType\":\"\",
+                    \"IsWeatherNearby\":null
+                }
+            },{
+                \"CorrelationGuid\":\"b1f47435-aec5-4007-9d46-65b4ed4215c5\",
+                \"DomainSpecificId\":null,
+                \"DisplayName\":\"Washington, District of Columbia\",
+                \"CreatedTimeInTicksUtc\":637232429538753923,
+                \"InterestType\":12,
+                \"InterestTypeSpecificFields\":{                    \"Latitude\":\"38.89\",		            \"Longitude\":\"-77.03\",		            \"City\":\"Washington\",		            \"State\":\"District of Columbia\",		            \"CountryRegion\":\"United States\",		            \"ISOCode\":\"US\",		            \"LocationType\":null,		            \"EntityType\":\"\",		            \"IsWeatherNearby\":null
+                }
+            }]"
+
+
+        */
         public static IEnumerable<Document> GetWeatherAction(JObject docObj, string userId)
         {
             // Preconditions //
@@ -387,6 +457,7 @@ namespace MigrationConsoleApp
             return docs.AsEnumerable();
         }
 
+        #region Sports and Finance
         public static IEnumerable<Document> GetSportsAction(JObject docObj, string userId)
         {
             // Preconditions //
@@ -499,6 +570,7 @@ namespace MigrationConsoleApp
             return docs.AsEnumerable();
         }
 
+        #endregion Sports and Finance
         public static string ToLowerFirstChar(string input)
         {
             var words = input.Split('.');
