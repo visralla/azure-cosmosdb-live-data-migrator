@@ -12,6 +12,8 @@ using MsnAction = Msn.TagsDataModel.TagEntityLib.Action;
 using MsnUser = Msn.TagsDataModel.TagEntityLib.User;
 using Msn.TagsDataModel.TagEntityLib;
 using System.Security.Cryptography;
+using Azure.Storage.Blobs;
+using System.IO;
 
 namespace MigrationConsoleApp
 {
@@ -23,7 +25,7 @@ namespace MigrationConsoleApp
             NullValueHandling = NullValueHandling.Ignore
         };
 
-        public static IEnumerable<Document> TransformDocument(Document sourceDoc)
+        public static IEnumerable<Document> TransformDocument(Document sourceDoc, BlobContainerClient containerClient)
         {
             var docs = new List<Document>();
 
@@ -36,22 +38,30 @@ namespace MigrationConsoleApp
                 return new List<Document>().AsEnumerable();
             }
 
-            switch (type)
+            try
             {
-                case "Interests.NewsQuery":
-                    return GetNewsAction(obj, userId);
-                case "Interests.Weather":
-                    return GetWeatherAction(obj, userId);
-                case "Interests.TrendingOnBingTopic":
-                    return GetTrendingOnBingAction(obj, userId);
-                case "InterestSettings":
-                    return GetInterestSettings(obj, userId);
-                /*case "Interests.SportsTeam":
-                    return GetSportsAction(obj, userId);
-                case "Interests.FinanceSecurity":
-                    return GetFinanceAction(obj, userId);*/
-                default:
-                    return new List<Document>().AsEnumerable();
+                switch (type)
+                {
+                    case "Interests.NewsQuery":
+                        return GetNewsAction(obj, userId);
+                    case "Interests.Weather":
+                        return GetWeatherAction(obj, userId, containerClient);
+                    case "Interests.TrendingOnBingTopic":
+                        return GetTrendingOnBingAction(obj, userId, containerClient);
+                    case "InterestSettings":
+                        return GetInterestSettings(obj, userId);
+                    /*case "Interests.SportsTeam":
+                        return GetSportsAction(obj, userId);
+                    case "Interests.FinanceSecurity":
+                        return GetFinanceAction(obj, userId);*/
+                    default:
+                        return new List<Document>().AsEnumerable();
+                }
+            }
+            catch (Exception e)
+            {
+                WriteExceptionToBlob(containerClient, e, sourceDoc.ToString(), userId);
+                return new List<Document>().AsEnumerable();
             }
         }
 
@@ -230,7 +240,7 @@ namespace MigrationConsoleApp
 
 
         */
-        public static IEnumerable<Document> GetWeatherAction(JObject docObj, string userId)
+        public static IEnumerable<Document> GetWeatherAction(JObject docObj, string userId, BlobContainerClient containerClient)
         {
             // Preconditions //
             var docs = new List<Document>();
@@ -258,6 +268,7 @@ namespace MigrationConsoleApp
                 if (string.IsNullOrWhiteSpace(latitude) || string.IsNullOrWhiteSpace(longitude))
                 {
                     Trace.TraceInformation("Skipping Location for user {0} due to missing Latitude and Longitude, doc id {1}", userId, (string)docObj["id"]);
+                    WriteFailedTransformationToBlob(containerClient, docObj.ToString(), userId, "WeatherNoLatOrLon");
                     continue;
                 }
 
@@ -316,7 +327,7 @@ namespace MigrationConsoleApp
             return docs.AsEnumerable();
         }
 
-        public static IEnumerable<Document> GetTrendingOnBingAction(JObject docObj, string userId)
+        public static IEnumerable<Document> GetTrendingOnBingAction(JObject docObj, string userId, BlobContainerClient containerClient)
         {
             // Preconditions //
             var docs = new List<Document>();
@@ -351,6 +362,7 @@ namespace MigrationConsoleApp
                 if (string.IsNullOrWhiteSpace(newsCategory))
                 {
                     Trace.TraceInformation("Skipping TrendingOnbing for user {0} due to missing NewsCategory, doc id {1}", userId, (string)docObj["id"]);
+                    WriteFailedTransformationToBlob(containerClient, docObj.ToString(), userId, "TrendingOnBingNoNewsCategory");
                     return new List<Document>();
                 }
 
@@ -606,6 +618,44 @@ namespace MigrationConsoleApp
             Politics = 6,
             Lifestyle = 7,
             Health = 8
+        }
+
+        /// <summary>
+        /// Records an Exception to Blob Store
+        /// </summary>
+        private static void WriteExceptionToBlob(BlobContainerClient containerClient, Exception e, string failedDocument, string failedUserId)
+        {
+            if (containerClient == null)
+            {
+                return;
+            }
+
+            BlobClient blobClient = containerClient.GetBlobClient($"Exception_{e.HResult}_{failedUserId}_{Guid.NewGuid()}.csv");
+            byte[] byteArray = Encoding.ASCII.GetBytes(e.Message.ToString() + failedDocument);
+
+            using (var ms = new MemoryStream(byteArray))
+            {
+                blobClient.UploadAsync(ms, overwrite: true);
+            }
+        }
+
+        /// <summary>
+        /// Records a transformation failure to Blob Storage
+        /// </summary>
+        private static void WriteFailedTransformationToBlob(BlobContainerClient containerClient, string failedDocument, string failedUserId, string failureType)
+        {
+            if (containerClient == null)
+            {
+                return;
+            }
+
+            BlobClient blobClient = containerClient.GetBlobClient($"TransformationFailure_{failureType}_{failedUserId}_{Guid.NewGuid()}.csv");
+            byte[] byteArray = Encoding.ASCII.GetBytes(failedDocument);
+
+            using (var ms = new MemoryStream(byteArray))
+            {
+                blobClient.UploadAsync(ms, overwrite: true);
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using Microsoft.Azure.Documents;
+﻿using Azure.Storage.Blobs;
+using Microsoft.Azure.Documents;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,6 +10,6 @@ namespace MigrationConsoleApp
 {
     public interface IDocumentTransformer
     {
-        Task<IEnumerable<Document>> TransformDocument(Document sourceDoc);
+        Task<IEnumerable<Document>> TransformDocument(Document sourceDoc, BlobContainerClient containerClient);
     }
 }

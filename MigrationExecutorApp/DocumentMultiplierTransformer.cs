@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
 using Microsoft.Azure.Documents;
 using Newtonsoft.Json;
 
@@ -20,5 +21,8 @@ namespace MigrationConsoleApp
             docs.Add(sourceDoc);
             return Task.FromResult(docs.AsEnumerable());
         }
+
+        public Task<IEnumerable<Document>> TransformDocument(Document sourceDoc, BlobContainerClient containerClient)
+            => TransformDocument(sourceDoc);
     }
 }

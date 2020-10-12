@@ -84,7 +84,7 @@
                 foreach (var doc in docs)
                 {
                     document = (SourcePartitionKeys != null & TargetPartitionKey != null) ? MapPartitionKey(doc, isSyntheticKey, TargetPartitionKey, isNestedAttribute, SourcePartitionKeys) : document = doc;
-                    transformedDocs.AddRange(documentTransformer.TransformDocument(document).Result);
+                    transformedDocs.AddRange(documentTransformer.TransformDocument(document, containerClient).Result);
                 }
 
                 if (transformedDocs.Any())
